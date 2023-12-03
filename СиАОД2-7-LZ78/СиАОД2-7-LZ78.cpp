@@ -45,7 +45,7 @@ void lz78Encode(const string& phrase) {
 }
 
 int main() {
-	lz78Encode("ACAGAATAGAGA");
+	lz78Encode("ynynanekanekaynyn");
 
 	return 0;
 }

@@ -47,7 +47,7 @@ void lz77Encode(const string& phrase) {
 }
 
 int main() {
-    lz77Encode("1110100110110001101");
+    lz77Encode("0100100010010000101");
 
     return 0;
 }

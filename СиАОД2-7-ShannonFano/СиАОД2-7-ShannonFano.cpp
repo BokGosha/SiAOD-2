@@ -1,148 +1,166 @@
 ﻿#include <iostream>
 #include <vector>
 #include <algorithm>
-#include <Windows.h>
-#include <string>
+#include <fstream>
+#include "map"
+#include "Windows.h"
 
 using namespace std;
 
-struct Node {
-	int symbol;
-	double probability;
-	string code;
+struct cell {
+    char letter;
+    string code;
+    double probability;
 
-	Node(int sym, double prob) : symbol(sym), probability(prob), code("") {}
+    cell(char letter, const string& code, double probability) : letter(letter), code(code),
+        probability(probability) {}
 };
 
-vector<Node*> nodes;
-string str;
-string codePhrase = "";
+void shannonFano(int left, int right, vector<cell*>& cells) {
+    if (left == right - 1) {
+        return;
+    }
 
-bool compareNodes(const Node* node1, const Node* node2) {
-	return node1->probability > node2->probability;
+    int currentSequenceStart = left;
+    int currentSequenceEnd = right - 1;
+    int sequenceLeftEnd = 0;
+    int sequenceRightStart = 0;
+    double leftSum = 0, rightSum = 0, sum = 0;
+
+    for (int i = currentSequenceStart; i <= currentSequenceEnd; i++) {
+        sum += cells[i]->probability;
+    }
+
+    double minDiff = sum;
+
+    for (int i = currentSequenceStart; i <= currentSequenceEnd; i++) {
+        leftSum += cells[i]->probability;
+        rightSum = sum - leftSum;
+
+        if (abs(leftSum - rightSum) < minDiff) {
+            minDiff = abs(leftSum - rightSum);
+        }
+        else {
+            sequenceRightStart = i;
+            sequenceLeftEnd = i - 1;
+            break;
+        }
+    }
+
+    for (int i = currentSequenceStart; i <= sequenceLeftEnd; i++) {
+        cells[i]->code += "0";
+    }
+
+    for (int i = sequenceRightStart; i <= currentSequenceEnd; i++) {
+        cells[i]->code += "1";
+    }
+
+    shannonFano(currentSequenceStart, sequenceLeftEnd + 1, cells);
+    shannonFano(sequenceRightStart, currentSequenceEnd + 1, cells);
 }
 
-void shannonFano(vector<Node*>& nodes, int start, int end) {
-	if (start == end) {
-		return;
-	}
+struct comparator {
+    bool operator()(cell* lx, cell* rx) const {
+        return lx->probability > rx->probability;
+    }
+};
 
-	int splitIndex = 0;
-	double sumLeft = 0, sumRight = 0;
-
-	double minDifference = 10000;
-
-	for (int i = start; i < end; ++i) {
-		sumLeft = 0.0;
-		sumRight = 0.0;
-
-		for (int j = start; j <= i; ++j) {
-			sumLeft += nodes[j]->probability;
-		}
-
-		for (int j = i + 1; j <= end; ++j) {
-			sumRight += nodes[j]->probability;
-		}
-
-		double difference = abs(sumLeft - sumRight);
-
-		if (difference < minDifference) {
-			minDifference = difference;
-			splitIndex = i;
-		}
-	}
-
-	for (int i = start; i <= splitIndex; ++i) {
-		nodes[i]->code += "0";
-	}
-
-	for (int i = splitIndex + 1; i <= end; ++i) {
-		nodes[i]->code += "1";
-	}
-
-	shannonFano(nodes, start, splitIndex);
-	shannonFano(nodes, splitIndex + 1, end);
+void sort(vector<cell*>& cells) {
+    sort(cells.begin(), cells.end(), comparator());
 }
 
-void encodeShannonFano() {
-	cout << "Введите фразу: ";
+vector<cell*> createLettersMap(string& str) {
+    map<char, double> lettersMap;
 
-	getline(cin, str);
+    for (char letter : str) {
+        lettersMap[letter] = 0;
+    }
 
-	vector<int> array(256, 0);
+    for (char letter : str) {
+        lettersMap[letter] += 1;
+    }
 
-	for (char ch : str) {
-		if ((int)ch < 0) {
-			array[(int)ch + 192]++;
-		}
-		else {
-			array[ch]++;
-		}
-	}
+    vector<cell*> cells;
+    int i = 0;
 
-	for (int i = 0; i < 256; i++) {
-		if (array[i] > 0) {
-			int a = i;
-			double b = static_cast<double>(array[i]) / str.size();
-			nodes.push_back(new Node(a, b));
-		}
-	}
+    for (const auto& element : lettersMap) {
+        char letter = element.first;
+        double count = element.second;
+        cells.emplace_back(new cell(letter, "", count / str.length()));
+        i++;
+    }
 
-	sort(nodes.begin(), nodes.end(), compareNodes);
+    sort(cells);
 
-	shannonFano(nodes, 0, nodes.size() - 1);
-
-	for (char ch : str) {
-		for (Node* node : nodes) {
-			int n;
-
-			if (ch < 0) {
-				n = ch + 192;
-			}
-			else {
-				n = ch;
-			}
-
-			if (n == node->symbol) {
-				codePhrase += node->code;
-			}
-		}
-	}
-
-	cout << "Закодированная фраза: " << codePhrase << endl;
+    return cells;
 }
 
-void decodeShannonFano() {
-	string decoded;
-	string currentCode;
+cell* findByCode(string code, vector<cell*>& cells) {
+    for (auto& cell : cells) {
+        if (cell->code == code) {
+            return cell;
+        }
+    }
 
-	for (char c : codePhrase) {
-		currentCode += c;
+    return nullptr;
+}
 
-		for (Node* node : nodes) {
-			if (currentCode == node->code) {
-				if (node->symbol > 127) {
-					decoded += (char)(node->symbol - 192);
-				}
-				else {
-					decoded += (char)node->symbol;
-				}
+cell* findBySymbol(char symbol, vector<cell*>& cells) {
+    for (auto cell : cells) {
+        if (cell->letter == symbol) {
+            return cell;
+        }
+    }
+}
 
-				currentCode = "";
+string encode(string str, vector<cell*>& cells) {
+    string encoded;
 
-				break;
-			}
-		}
-	}
+    for (char letter : str) {
+        encoded += findBySymbol(letter, cells)->code;
+    }
 
-	cout << "Декодированное сообщение: " << decoded << endl;
+    return encoded;
+}
+
+string decode(string& str, vector<cell*>& cells) {
+    string decoded;
+    string currentSequence;
+
+    for (char letter : str) {
+        currentSequence += letter;
+        cell* crnt = findByCode(currentSequence, cells);
+
+        if (crnt != nullptr) {
+            decoded += crnt->letter;
+            currentSequence = "";
+        }
+    }
+
+    return decoded;
 }
 
 int main() {
-	system("chcp 1251");
+    SetConsoleOutputCP(CP_UTF8);
+    setlocale(LC_ALL, "ru");
 
-	encodeShannonFano();
-	decodeShannonFano();
+    string str;
+    
+    str = "Самолёт-вертолёт! Посади меня в полёт! А в полёте пусто - Выросла капуста.";
 
-	return 0;
+    vector<cell*> cells = createLettersMap(str);
+
+    shannonFano(0, cells.size(), cells);
+
+    cout << "Символы\t" << "Коды\t" << "Вероятности\t" << endl;
+    for (cell* i : cells) {
+        cout << i->letter << "\t" << i->code << "\t" << i->probability << "\t" << endl;
+    }
+
+    string encoded = encode(str, cells);
+
+    cout << "Закодированная строка: " << encoded << endl;
+    cout << "Раскодированная строка: " << decode(encoded, cells) << endl;
+
+    return 0;
 }
