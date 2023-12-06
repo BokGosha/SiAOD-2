@@ -1,88 +1,135 @@
-﻿#include <string>
-#include <map>
-#include <vector>
-#include <algorithm>
-#include <iostream>
+﻿#include <iostream>
+#include <string>
 #include <queue>
+#include <unordered_map>
+#include "windows.h"
+#include "map"
 
 using namespace std;
 
-struct HuffmanNode {
-	char data;
-	unsigned frequency;
-	HuffmanNode* left, * right;
+struct cell {
+    char ch;
+    int freq;
+    cell* left, * right;
 
-	HuffmanNode(char data, unsigned frequency) : data(data), frequency(frequency), left(nullptr), right(nullptr) {}
+    cell(char ch, int freq, cell* left, cell* right) : ch(ch), freq(freq), left(left), right(right) {}
 };
 
-
-struct CompareNodes {
-	bool operator()(HuffmanNode* a, HuffmanNode* b) {
-		return a->frequency > b->frequency;
-	}
+struct comp {
+    bool operator()(cell* l, cell* r) {
+        return l->freq > r->freq;
+    }
 };
 
-HuffmanNode* buildHuffmanTree(map<char, unsigned>& frequencies) {
-	priority_queue<HuffmanNode*, vector<HuffmanNode*>, CompareNodes> pq;
+void encode(cell* root, string str, unordered_map<char, string>& huffmanCode) {
+    if (root == nullptr)
+        return;
 
-	for (auto& freq : frequencies) {
-		pq.push(new HuffmanNode(freq.first, freq.second));
-	}
+    if (!root->left && !root->right) {
+        huffmanCode[root->ch] = str;
+    }
 
-	while (pq.size() > 1) {
-		HuffmanNode* left = pq.top();
-		pq.pop();
-		HuffmanNode* right = pq.top();
-		pq.pop();
-
-		HuffmanNode* newNode = new HuffmanNode('#', left->frequency + right->frequency);
-		newNode->left = left;
-		newNode->right = right;
-
-		pq.push(newNode);
-	}
-
-	return pq.top();
+    encode(root->left, str + "0", huffmanCode);
+    encode(root->right, str + "1", huffmanCode);
 }
 
-void encodeHuffmanTree(HuffmanNode* root, string code, map<char, string>& huffmanCodes) {
-	if (root == nullptr) {
-		return;
-	}
+string huffmanAlgorithm(string text, unordered_map<char, string>& codesHuffman) {
+    unordered_map<char, int> frequency;
 
-	if (!root->left && !root->right) {
-		huffmanCodes[root->data] = code;
-	}
+    for (char ch : text) {
+        frequency[ch]++;
+    }
 
-	encodeHuffmanTree(root->left, code + "0", huffmanCodes);
-	encodeHuffmanTree(root->right, code + "1", huffmanCodes);
+    priority_queue<cell*, vector<cell*>, comp> tree;
+
+    for (auto pair : frequency) {
+        tree.push(new cell(pair.first, pair.second, nullptr, nullptr));
+    }
+
+    while (tree.size() != 1) {
+        cell* left = tree.top();
+        tree.pop();
+        cell* right = tree.top();
+        tree.pop();
+        int sum = left->freq + right->freq;
+        tree.push(new cell('\0', sum, left, right));
+    }
+
+    cell* root = tree.top();
+
+    encode(root, "", codesHuffman);
+
+    cout << "Символы по коду Хаффмана:" << endl;
+    for (auto code : codesHuffman) {
+        cout << code.first << " " << code.second << endl;
+    }
+
+    string str = "";
+    for (char ch : text) {
+        str += codesHuffman[ch];
+    }
+
+    return str;
+}
+
+char findAtMap(string str, unordered_map<char, string>& codesHuffman) {
+    for (auto pair : codesHuffman) {
+        if (pair.second == str)
+            return pair.first;
+    }
+
+    return '\0';
+}
+
+string decode(string str, unordered_map<char, string>& codesHuffman) {
+    string decoded;
+    string currentSequence;
+
+    for (char letter : str) {
+        currentSequence += letter;
+        char crnt = findAtMap(currentSequence, codesHuffman);
+
+        if (crnt != '\0') {
+            decoded += crnt;
+            currentSequence = "";
+        }
+    }
+
+    return decoded;
 }
 
 int main() {
-	system("chcp 1251");
+    system("chcp 1251");
 
-	string line;
-	map<char, unsigned> frequencies;
+    string text = "БОКОЕВ ГЕОРГИЙ РУСЛАНОВИЧ";
 
-	cout << "Введите фразу: ";
+    unordered_map<char, string> codesHuffman;
 
-	getline(cin, line);
+    string encoded = huffmanAlgorithm(text, codesHuffman);
 
-	for (char ch : line) {
-		frequencies[ch]++;
-	}
+    cout << "Закодированная строка : " << encoded << endl;
+    cout << "Pаcкодированная строка: " << decode(encoded, codesHuffman) << endl;
 
-	HuffmanNode* root = buildHuffmanTree(frequencies);
+    map<char, int> freq;
 
-	map<char, string> huffmanCodes;
-	encodeHuffmanTree(root, "", huffmanCodes);
+    for (char c : text) {
+        freq[c] = 0;
+    }
+    for (char c : text) {
+        freq[c] += 1;
+    }
 
-	string compressedData = "";
-	for (char c : line) {
-		compressedData += huffmanCodes[c] + " ";
-	}
+    int ravn = 0;
+    int ascii = 0;
+    int sumCodesLength = 0;
 
-	cout << compressedData;
+    for (auto pair : codesHuffman) {
+        ravn += 6 * freq[pair.first];
+        ascii += 7 * pair.second.length() * freq[pair.first];
+        sumCodesLength += pair.second.length();
+    }
 
-	return 0;
+    cout << "Коэфициент Равномерный код / ASCII: " << (double)ravn / ascii << endl;
+    cout << "Средняя длина кода: " << sumCodesLength * 1.0 / codesHuffman.size() << endl;
+    return 0;
 }
